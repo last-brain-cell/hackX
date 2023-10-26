@@ -4,64 +4,69 @@ import openai
 openai.api_key = "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"
 
 
-def ask_question(prompt, context):
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": context},
-            {"role": "user", "content": prompt},
-        ],
+def ask_question(messages):
+    response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=messages)
+    return response["choices"][0]["message"]
+
+
+def run_conversation(symptoms, diagnoses):
+    messages = [
+        {
+            "role": "system",
+            "content": f"Given the following symptoms you have make a possible diagnosis. The primary diagnosis is {' '.join(diagnoses)}. Ask further questions to make the diagnosis more accurate. The questions must be framed in the way a doctor would ask a patient questions. Just return the questions.",
+        },
+        {
+            "role": "user",
+            "content": " ".join(symptoms),
+        },
+    ]
+    response_message = ask_question(messages)
+    questions = response_message["content"].split("\n")
+    questions.pop()
+    questions.pop()
+    answers = list()
+
+    for question in questions:
+        answers.append(input(str(question) + " : "))
+
+    messages.extend(
+        [
+            {
+                "role": "assistant",
+                "content": "\n".join(questions),
+            },
+            {
+                "role": "user",
+                "content": "\n".join(answers)
+                + ".\nNow Generate a diagnosis using these answers.",
+            },
+        ]
     )
 
-    answer = response.choices[0].text.strip()
-    return answer
+    diagnosis = ask_question(messages)
+    diagnosis = diagnosis["content"]
 
+    name = input("What's your Name? : ")
+    age = input("What's your Age : ")
 
-def diagnose_patient(symptoms, possible_diagnoses):
-    context = "You are a medical professional trying to diagnose a patient."
-    diagnosis_probabilities = {diagnosis: 0 for diagnosis in possible_diagnoses}
-
-    for symptom in symptoms:
-        question = f"What other details can you provide about the symptom: {symptom}?"
-        user_response = ask_question(question, context)
-
-        associated_symptoms = generate_associated_symptoms(
-            user_response, diagnosis_probabilities
-        )
-
-        for other_symptom in associated_symptoms:
-            for diagnosis in possible_diagnoses:
-                if other_symptom.lower() in user_response.lower():
-                    diagnosis_probabilities[diagnosis] += 1
-
-        severity_question = f"On a scale of 1 to 10, how severe is the {symptom}?"
-        user_severity_response = int(
-            input(ask_question(severity_question, context) + " ")
-        )
-
-        severity_factor = user_severity_response / 10
-        diagnosis_probabilities[diagnosis] *= severity_factor
-
-    likely_diagnosis = max(diagnosis_probabilities, key=diagnosis_probabilities.get)
-    return likely_diagnosis
-
-
-def generate_associated_symptoms(user_response, diagnosis_probabilities):
-    associated_symptoms = []
-
-    associated_symptoms_response = ask_question(
-        "What other symptoms are often associated with this condition?", user_response
+    messages.extend(
+        [
+            {
+                "role": "assistant",
+                "content": diagnosis,
+            },
+            {
+                "role": "user",
+                "content": f"generate a report from the above information to assist the doctor into making a diagnosis. Age of this patient is {age} and name is {name}",
+            },
+        ]
     )
 
-    if "cough" in associated_symptoms_response:
-        associated_symptoms.append("cough")
-    if "fatigue" in associated_symptoms_response:
-        associated_symptoms.append("fatigue")
+    report = ask_question(messages)
 
-    return associated_symptoms
+    print(report["content"])
 
 
-possible_diagnoses = ["Influenza", "Dengue", "Malaria"]
-user_symptoms = ["fever", "coughing", "joint pain"]
-likely_diagnosis = diagnose_patient(user_symptoms, possible_diagnoses)
-print(f"The most likely diagnosis is: {likely_diagnosis}")
+preliminary_diagnoses = ["Common Cold", "Influenza"]
+user_symptoms = ["coughing", "fever", "body aching", "cold"]
+run_conversation(user_symptoms, preliminary_diagnoses)
